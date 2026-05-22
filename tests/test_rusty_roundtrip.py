@@ -58,6 +58,64 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+# -----------------------------------------------------------------------------
+# Known rusty (v0.5.0) divergences from the IEC standard / matiec.
+# -----------------------------------------------------------------------------
+#
+# rusty doesn't claim full IEC 61131-3 §3 coverage.  These markers
+# capture specific gaps surfaced by the v0.5.0 release so CI tracks
+# them as tripwires (an ``XPASS`` if rusty closes the gap means
+# we should remove the marker).
+#
+# Sourced from the rusty CI run on the corpus expansion PR.
+
+#: rusty v0.5.0 doesn't support IEC §6.7 SFC text representation
+#: (``INITIAL_STEP`` / ``STEP`` / ``TRANSITION ... END_TRANSITION``).
+#: Errors with "Unexpected token: expected KeywordSemicolon" because
+#: it tries to parse the SFC block as a regular ST statement.
+#: matiec accepts this whole family; rusty doesn't.
+_xfail_sfc = pytest.mark.xfail(
+    reason=(
+        "rusty v0.5.0 doesn't support IEC §6.7 SFC text "
+        "representation (INITIAL_STEP / STEP / TRANSITION).  "
+        "matiec accepts this -- rusty is a tripwire here in case "
+        "the gap closes upstream."
+    ),
+    strict=False,
+)
+
+#: rusty v0.5.0 doesn't support IEC §2.7 system-organisation
+#: (``CONFIGURATION ... END_CONFIGURATION``, ``RESOURCE``, ``TASK``,
+#: bound ``PROGRAM <inst> WITH <task>``).  Errors with "Unexpected
+#: token: expected StartKeyword but found CONFIGURATION".
+_xfail_config = pytest.mark.xfail(
+    reason=(
+        "rusty v0.5.0 doesn't support IEC §2.7 CONFIGURATION / "
+        "RESOURCE / TASK blocks.  matiec accepts these -- rusty "
+        "is a tripwire here in case the gap closes upstream."
+    ),
+    strict=False,
+)
+
+#: rusty v0.5.0's stdlib (``plc-stdlib`` .deb) uses non-IEC-standard
+#: parameter names for SR / LIMIT:
+#:   - SR has ``SET1`` / ``RESET`` / ``Q1`` (IEC: ``S1`` / ``R`` / ``Q1``)
+#:   - LIMIT has ``MIN`` / ``IN`` / ``MAX`` (IEC: ``MN`` / ``IN`` / ``MX``)
+#: Our ST emit follows the IEC standard (matiec accepts), so rusty
+#: rejects the named arguments.  Closing this would require either
+#: a rusty-specific stdlib remap pass or a rusty upstream fix.
+_xfail_stdlib_names = pytest.mark.xfail(
+    reason=(
+        "rusty v0.5.0's stdlib uses non-IEC-standard parameter "
+        "names (SR uses SET1/RESET, LIMIT uses MIN/MAX).  Our ST "
+        "emit follows IEC; matiec accepts.  Closing the gap "
+        "needs either a backend-specific stdlib remap or a rusty "
+        "upstream fix."
+    ),
+    strict=False,
+)
+
+
 def _need_stdlib_or_skip():
     """Module-level helper: cases that reference IEC §2.5 stdlib FBs
     need ``/usr/share/plc/include/*.st`` resolvable.  Without it,
@@ -208,8 +266,11 @@ def test_ld_with_r_trig_FB_parses_in_rusty():
     _assert_rusty_accepts(emit_program(p), need_stdlib=True)
 
 
+@_xfail_stdlib_names
 def test_ld_with_sr_bistable_FB_parses_in_rusty():
-    """SR set-dominant bistable per IEC §2.5.2.3.3."""
+    """SR set-dominant bistable per IEC §2.5.2.3.3.  xfail on
+    rusty v0.5.0: stdlib uses ``SET1`` / ``RESET`` instead of IEC
+    ``S1`` / ``R``."""
     _need_stdlib_or_skip()
     p = program(subroutines=[
         prog("Main", main=True,
@@ -284,8 +345,10 @@ def test_function_pou_definition_and_call_parses_in_rusty():
 # -----------------------------------------------------------------------------
 
 
+@_xfail_sfc
 def test_sfc_body_parses_in_rusty():
-    """SFC: INITIAL_STEP + STEP + TRANSITION + action."""
+    """SFC: INITIAL_STEP + STEP + TRANSITION + action.  xfail on
+    rusty v0.5.0 (no SFC text-representation support)."""
     sfc_net = SfcNetwork(
         steps=[
             Step("Init", initial=True),
@@ -301,8 +364,10 @@ def test_sfc_body_parses_in_rusty():
     _assert_rusty_accepts(emit_program(p))
 
 
+@_xfail_sfc
 def test_sfc_with_simultaneous_convergence_parses_in_rusty():
-    """Multi-from transition: ``FROM (A, B) TO Joined``."""
+    """Multi-from transition: ``FROM (A, B) TO Joined``.  xfail
+    on rusty v0.5.0 (no SFC support)."""
     sfc_net = SfcNetwork(
         steps=[
             Step("A", initial=True),
@@ -321,8 +386,10 @@ def test_sfc_with_simultaneous_convergence_parses_in_rusty():
     _assert_rusty_accepts(emit_program(p))
 
 
+@_xfail_sfc
 def test_sfc_with_timed_action_parses_in_rusty():
-    """Action with ``time_ms`` emits ``act(L, T#500ms);``."""
+    """Action with ``time_ms`` emits ``act(L, T#500ms);``.  xfail
+    on rusty v0.5.0 (no SFC support)."""
     sfc_net = SfcNetwork(
         steps=[
             Step("Init", initial=True),
@@ -340,10 +407,11 @@ def test_sfc_with_timed_action_parses_in_rusty():
     _assert_rusty_accepts(emit_program(p))
 
 
+@_xfail_sfc
 def test_sfc_with_macrostep_parses_in_rusty():
     """Hierarchical SFC: a Step.macro carrying an inner network
     emits as a plain STEP placeholder at the outer level (PR #66
-    in parent)."""
+    in parent).  xfail on rusty v0.5.0 (no SFC support)."""
     inner = SfcNetwork(
         steps=[
             Step("SubInit", initial=True),
@@ -550,7 +618,10 @@ def test_st_repeat_loop_parses_in_rusty():
 # -----------------------------------------------------------------------------
 
 
+@_xfail_config
 def test_configuration_resource_task_parses_in_rusty():
+    """Full CONFIGURATION / RESOURCE / TASK / PROGRAM-WITH-TASK
+    wrapper.  xfail on rusty v0.5.0 (no §2.7 support)."""
     p = program(
         subroutines=[
             prog("Main",
@@ -624,9 +695,11 @@ def test_vendor_address_falls_back_to_comment_in_st():
     _assert_rusty_accepts(out)
 
 
+@_xfail_config
 def test_var_external_to_config_global_with_at_clause_parses_in_rusty():
     """§2.4.3 VAR_EXTERNAL bound to §2.7.1 config-scope VAR_GLOBAL
-    with an AT %QX0.0 clause."""
+    with an AT %QX0.0 clause.  xfail on rusty v0.5.0 (the
+    CONFIGURATION wrapper isn't supported)."""
     from universal_machinery.il.ast import PouKind, Subroutine
     main_pou = Subroutine(
         name="Main",
@@ -667,8 +740,11 @@ def test_var_external_to_config_global_with_at_clause_parses_in_rusty():
 # -----------------------------------------------------------------------------
 
 
+@_xfail_stdlib_names
 def test_selection_functions_parse_in_rusty():
-    """SEL / MAX / MIN / LIMIT per IEC §2.5.2.8."""
+    """SEL / MAX / MIN / LIMIT per IEC §2.5.2.8.  xfail on rusty
+    v0.5.0: ``LIMIT`` in its stdlib uses ``MIN``/``MAX`` instead
+    of IEC ``MN``/``MX``."""
     _need_stdlib_or_skip()
     p = program(subroutines=[
         prog("Main", main=True,
