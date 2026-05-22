@@ -165,17 +165,21 @@ def _oop_program():
 def test_rusty_accepts_basic_ld_st_function_program():
     """Headline round-trip: a representative LD + TON + FUNCTION
     program emitted by the parent's ST emitter compiles cleanly
-    through rusty's ``plc``.  Returns the same parse-accept
-    signal as the matiec harness in the parent project."""
+    through rusty's ``plc -c``.  ``need_stdlib=True`` pulls in
+    the IEC §2.5 stdlib declarations so ``TON`` resolves.  Returns
+    the same parse-accept signal as the matiec harness in the
+    parent project."""
     from rusty_backend import RustyBackend
-    from rusty_backend.runner import run_rusty
+    from rusty_backend.runner import find_rusty_stdlib, run_rusty
     from universal_machinery.emitters.st import emit_program
-    # We could also write to a temp file and use plc's file input;
-    # ``run_rusty`` already handles both shapes.  Going through the
-    # backend's ``write()`` here so any wrapper-side regression
-    # (e.g. accidentally double-encoding) surfaces too.
+    if find_rusty_stdlib() is None:
+        pytest.skip(
+            "rusty stdlib include dir not found; can't resolve TON.  "
+            "Install ``plc-stdlib`` (.deb companion package on the "
+            "rusty release page)"
+        )
     st_source = emit_program(_representative_program())
-    rc, stdout, stderr = run_rusty(st_source)
+    rc, stdout, stderr = run_rusty(st_source, need_stdlib=True)
     assert rc == 0, (
         f"rusty rejected the basic LD+ST+FUNCTION program:\n"
         f"--- stderr ---\n{stderr}\n--- stdout ---\n{stdout}"
@@ -197,7 +201,10 @@ def test_rusty_accepts_3rd_edition_oop():
 
     See the parent's
     ``tests/test_matiec_roundtrip.py`` for the matiec-rejection
-    side of the asymmetry."""
+    side of the asymmetry.
+
+    No stdlib needed -- the OOP shape doesn't reference any
+    standard-library FBs."""
     from rusty_backend.runner import run_rusty
     from universal_machinery.emitters.st import emit_program
     st_source = emit_program(_oop_program())

@@ -48,17 +48,24 @@ jobs:
           pip install -e ./universal_machinery[dev]
           pip install -e ./backend[dev]
 
-      - name: Install rusty (plc binary)
-        # Pre-built binary from the rusty release page; needs
-        # glibc 2.36+, which Ubuntu 24.04 (glibc 2.39) satisfies.
-        # Pinning to a specific release tag keeps the test surface
-        # deterministic -- bump as new rusty releases land.
+      - name: Install rusty (plc-compiler + plc-stdlib .deb)
+        # Pre-built binary needs glibc 2.36+, which Ubuntu 24.04
+        # (glibc 2.39) satisfies.  Pinning to v0.5.0 keeps the
+        # test surface deterministic -- bump as new rusty releases
+        # land.  The .deb pair installs both ``plc`` (compiler)
+        # and the IEC §2.5 stdlib declarations under
+        # ``/usr/share/plc/include/`` so ``TON`` / ``CTU`` /
+        # ``R_TRIG`` etc. resolve at compile time.
         run: |
-          sudo curl -sSL \
-            https://github.com/PLC-lang/rusty/releases/download/v0.5.0/plc-linux-x86_64 \
-            -o /usr/local/bin/plc
-          sudo chmod +x /usr/local/bin/plc
+          curl -sSL \
+            https://github.com/PLC-lang/rusty/releases/download/v0.5.0/plc-compiler_0.5.0-1_amd64.deb \
+            -o /tmp/plc-compiler.deb
+          curl -sSL \
+            https://github.com/PLC-lang/rusty/releases/download/v0.5.0/plc-stdlib_0.5.0-1_amd64.deb \
+            -o /tmp/plc-stdlib.deb
+          sudo dpkg -i /tmp/plc-compiler.deb /tmp/plc-stdlib.deb
           plc --version || true
+          ls /usr/share/plc/include/ | head -10
 
       - name: Run pytest
         # API-shape smoke tests + real round-trip via the rusty
