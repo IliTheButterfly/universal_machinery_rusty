@@ -35,7 +35,7 @@ Same headline IEC 2nd-edition surface as the `openplc` backend (LD, ST, SFC, tim
 | `implements` | yes | no -- depends on INTERFACE |
 | `abstract` | yes | no -- depends on METHOD |
 
-Reading `.st` back into IL is not supported (no full-program ST parser upstream yet); round-trip via the `openplc` backend's `.xml` path instead.
+Reading `.st` back into IL is supported via the parent's `parse_program` (v1, since universal_machinery PR #84) — round-trips PROGRAM / FUNCTION / FUNCTION_BLOCK with VAR_INPUT / VAR_OUTPUT / VAR_IN_OUT / VAR (LOCAL) blocks + body.  Out-of-scope shapes (VAR_EXTERNAL / VAR_TEMP / VAR_GLOBAL, AT clauses, TYPE blocks, CONFIGURATION, OOP, SFC text) raise `StParseError`; round-trip via the `openplc` backend's `.xml` path for those.
 
 ## Dependencies
 

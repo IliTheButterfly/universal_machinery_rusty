@@ -26,6 +26,7 @@ from pathlib import Path
 from universal_machinery.backends import Backend, register
 from universal_machinery.emitters.st import emit_program
 from universal_machinery.il import Program
+from universal_machinery.parsers.st_text import parse_program
 
 
 @register("rusty")
@@ -88,17 +89,26 @@ class RustyBackend(Backend):
             )
 
     def read(self, path: str) -> Program:
-        """Parsing rusty's input language back to IL is not supported.
+        """Parse a ``.st`` file and return an IL ``Program``.
 
-        The parent project ships an ST expression / statement parser
-        (``universal_machinery.parsers.st_text``) but no full-program
-        ST parser that reconstructs Subroutine + Configuration + TYPE
-        block declarations.  Round-trip via the ``openplc`` backend's
-        ``.xml`` path instead until the ST-program parser lands."""
-        raise NotImplementedError(
-            "RustyBackend.read: .st parsing not yet wired up.  "
-            "The parent project has an ST statement parser but no "
-            "full-program ST parser (no Subroutine / Configuration "
-            "/ TYPE block reconstruction).  Round-trip via the "
-            "``openplc`` backend's .xml path instead."
-        )
+        Routes through the parent's full-program ST parser
+        (``universal_machinery.parsers.st_text.parse_program``,
+        added in universal_machinery PR #84).  Scope (v1):
+        PROGRAM / FUNCTION / FUNCTION_BLOCK with VAR_INPUT /
+        VAR_OUTPUT / VAR_IN_OUT / VAR (LOCAL) blocks + body.
+
+        Out-of-scope shapes (VAR_EXTERNAL / VAR_TEMP /
+        VAR_GLOBAL, AT clauses, TYPE blocks, CONFIGURATION, OOP,
+        SFC text) raise ``StParseError`` from the parser side
+        with a focused message pointing at the missing slice.
+        """
+        p = Path(path)
+        suffix = p.suffix.lower()
+        if suffix == ".st":
+            return parse_program(p.read_text(encoding="utf-8"))
+        else:
+            raise ValueError(
+                f"RustyBackend.read: unsupported suffix {suffix!r} "
+                f"for {p}; rusty consumes .st only.  Use the "
+                f"``openplc`` backend for .xml input."
+            )
