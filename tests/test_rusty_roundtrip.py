@@ -28,10 +28,10 @@ import pytest
 
 from rusty_backend.runner import find_rusty_bin, find_rusty_stdlib, run_rusty
 from universal_machinery.builders import (
-    abs_, add, and_, assign, case_, case_clause, coil, ctu, eq, fb,
-    fcall_expr, fn, for_, if_, jump, label_, move, no, prog, program,
-    r_trig, repeat_, ret, rung, sel, sr, ton, var, var_in, var_out,
-    while_,
+    abs_, add, and_, assign, case_, case_clause, coil, ctd, ctu, ctud,
+    eq, f_trig, fb, fcall_expr, fn, for_, if_, jump, label_, move, no,
+    prog, program, r_trig, repeat_, ret, rs, rung, sel, sr, tof, ton,
+    tp, var, var_in, var_out, while_,
 )
 from universal_machinery.emitters.st import emit_program
 from universal_machinery.il import NamedType, TagType
@@ -281,6 +281,133 @@ def test_ld_with_sr_bistable_FB_parses_in_rusty():
                      direction=VarDirection.LOCAL),
              ],
              rungs=[rung(sr(q1="output", s1="setbtn", r="resetbtn"))]),
+    ])
+    _assert_rusty_accepts(emit_program(p), need_stdlib=True)
+
+
+# -----------------------------------------------------------------------------
+# Sibling FBs (every IEC §2.5.2.3 family fully exercised through rusty)
+# -----------------------------------------------------------------------------
+
+
+def test_ld_with_TOF_FB_parses_in_rusty():
+    """TOF off-delay timer per IEC §2.5.2.3.1.  Same call shape
+    as TON (``inst(IN := gate, PT := T#1000ms); done := inst.Q;``)."""
+    _need_stdlib_or_skip()
+    p = program(subroutines=[
+        prog("Main", main=True,
+             local_vars=[
+                 var("trigger", TagType.BOOL),
+                 var("done", TagType.BOOL),
+                 Var(name="t1", data_type=NamedType("TOF"),
+                     direction=VarDirection.LOCAL),
+             ],
+             rungs=[rung(no("trigger"), tof("t1", 1000, done_bit="done"))]),
+    ])
+    _assert_rusty_accepts(emit_program(p), need_stdlib=True)
+
+
+def test_ld_with_TP_FB_parses_in_rusty():
+    """TP pulse timer per IEC §2.5.2.3.1."""
+    _need_stdlib_or_skip()
+    p = program(subroutines=[
+        prog("Main", main=True,
+             local_vars=[
+                 var("trigger", TagType.BOOL),
+                 var("done", TagType.BOOL),
+                 Var(name="t1", data_type=NamedType("TP"),
+                     direction=VarDirection.LOCAL),
+             ],
+             rungs=[rung(no("trigger"), tp("t1", 1000, done_bit="done"))]),
+    ])
+    _assert_rusty_accepts(emit_program(p), need_stdlib=True)
+
+
+def test_ld_with_down_counter_FB_parses_in_rusty():
+    """CTD down-counter per IEC §2.5.2.3.2."""
+    _need_stdlib_or_skip()
+    p = program(subroutines=[
+        prog("Main", main=True,
+             local_vars=[
+                 var("gate", TagType.BOOL),
+                 var("load_bit", TagType.BOOL),
+                 var("done", TagType.BOOL),
+                 var("cv", TagType.INT),
+                 Var(name="counter_inst", data_type=NamedType("CTD"),
+                     direction=VarDirection.LOCAL),
+             ],
+             rungs=[rung(no("gate"),
+                           ctd("counter_inst", 5,
+                               load="load_bit",
+                               done_bit="done",
+                               accumulator="cv"))]),
+    ])
+    _assert_rusty_accepts(emit_program(p), need_stdlib=True)
+
+
+def test_ld_with_up_down_counter_FB_parses_in_rusty():
+    """CTUD up/down counter per IEC §2.5.2.3.2.  Most complex
+    counter family member: CU + CD inputs, optional R / LD, dual
+    QU/QD outputs."""
+    _need_stdlib_or_skip()
+    p = program(subroutines=[
+        prog("Main", main=True,
+             local_vars=[
+                 var("up_input", TagType.BOOL),
+                 var("down_input", TagType.BOOL),
+                 var("reset_bit", TagType.BOOL),
+                 var("load_bit", TagType.BOOL),
+                 var("qu", TagType.BOOL),
+                 var("qd", TagType.BOOL),
+                 var("cv", TagType.INT),
+                 Var(name="counter_inst", data_type=NamedType("CTUD"),
+                     direction=VarDirection.LOCAL),
+             ],
+             rungs=[rung(ctud("counter_inst", 5,
+                                cu_input="up_input",
+                                cd_input="down_input",
+                                reset="reset_bit",
+                                load="load_bit",
+                                qu="qu", qd="qd",
+                                accumulator="cv"))]),
+    ])
+    _assert_rusty_accepts(emit_program(p), need_stdlib=True)
+
+
+def test_ld_with_f_trig_FB_parses_in_rusty():
+    """F_TRIG falling-edge detector per IEC §2.5.2.3.3.  Mirrors
+    R_TRIG -- both should compile cleanly through rusty."""
+    _need_stdlib_or_skip()
+    p = program(subroutines=[
+        prog("Main", main=True,
+             local_vars=[
+                 var("trigger", TagType.BOOL),
+                 var("pulse", TagType.BOOL),
+                 Var(name="ft", data_type=NamedType("F_TRIG"),
+                     direction=VarDirection.LOCAL),
+             ],
+             rungs=[rung(f_trig(state="ft", clk="trigger", q="pulse"))]),
+    ])
+    _assert_rusty_accepts(emit_program(p), need_stdlib=True)
+
+
+@_xfail_stdlib_names
+def test_ld_with_rs_bistable_FB_parses_in_rusty():
+    """RS reset-dominant bistable per IEC §2.5.2.3.3.  xfail on
+    rusty v0.5.0 for the same reason as SR: rusty's stdlib uses
+    ``SET``/``RESET1`` instead of IEC ``S``/``R1``.  Pinned as a
+    tripwire -- if rusty closes the SR/RS naming gap upstream
+    both tests transition XFAIL->XPASS together."""
+    _need_stdlib_or_skip()
+    p = program(subroutines=[
+        prog("Main", main=True,
+             local_vars=[
+                 var("setbtn", TagType.BOOL),
+                 var("resetbtn", TagType.BOOL),
+                 Var(name="output", data_type=NamedType("RS"),
+                     direction=VarDirection.LOCAL),
+             ],
+             rungs=[rung(rs(q1="output", r1="resetbtn", s="setbtn"))]),
     ])
     _assert_rusty_accepts(emit_program(p), need_stdlib=True)
 
