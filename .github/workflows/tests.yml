@@ -1,0 +1,74 @@
+name: tests
+
+# Per project policy CI only runs against the integration branches:
+# every PR merging into main or dev gets exercised; in-flight feature
+# branches don't burn CI minutes per push.
+on:
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  pytest:
+    name: pytest (Python ${{ matrix.python-version }})
+    # Ubuntu 24.04 ships glibc 2.39, which rusty's pre-built
+    # binary needs (the 22.04 / glibc 2.35 runners can't run it).
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - name: Checkout backend
+        uses: actions/checkout@v4
+        with:
+          path: backend
+
+      # The backend dispatches to ``universal_machinery``'s ST
+      # emitter, so we clone the parent project alongside and
+      # install it first.  Tracking the parent's ``dev`` branch
+      # matches the project's integration policy: submodule PRs
+      # go against parent dev, and dev is where the latest
+      # emitter fixes land.
+      - name: Checkout universal_machinery (parent)
+        uses: actions/checkout@v4
+        with:
+          repository: IliTheButterfly/universal_machinery
+          ref: dev
+          path: universal_machinery
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install parent + backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ./universal_machinery[dev]
+          pip install -e ./backend[dev]
+
+      - name: Install rusty (plc-compiler + plc-stdlib .deb)
+        # Pre-built binary needs glibc 2.36+, which Ubuntu 24.04
+        # (glibc 2.39) satisfies.  Pinning to v0.5.0 keeps the
+        # test surface deterministic -- bump as new rusty releases
+        # land.  The .deb pair installs both ``plc`` (compiler)
+        # and the IEC §2.5 stdlib declarations under
+        # ``/usr/share/plc/include/`` so ``TON`` / ``CTU`` /
+        # ``R_TRIG`` etc. resolve at compile time.
+        run: |
+          curl -sSL \
+            https://github.com/PLC-lang/rusty/releases/download/v0.5.0/plc-compiler_0.5.0-1_amd64.deb \
+            -o /tmp/plc-compiler.deb
+          curl -sSL \
+            https://github.com/PLC-lang/rusty/releases/download/v0.5.0/plc-stdlib_0.5.0-1_amd64.deb \
+            -o /tmp/plc-stdlib.deb
+          sudo dpkg -i /tmp/plc-compiler.deb /tmp/plc-stdlib.deb
+          plc --version || true
+          ls /usr/share/plc/include/ | head -10
+
+      - name: Run pytest
+        # API-shape smoke tests + real round-trip via the rusty
+        # subprocess.  Skips cleanly if /usr/local/bin/plc isn't
+        # executable (shouldn't happen now we install it above).
+        run: cd backend && pytest tests/ -v

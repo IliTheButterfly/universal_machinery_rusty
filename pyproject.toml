@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rusty_backend"
+version = "0.1.0"
+description = "Emit IEC §3 Structured Text consumable by the rusty (PLC-lang) compiler"
+readme = "README.md"
+license = { text = "AGPL-3.0-or-later" }
+requires-python = ">=3.10"
+authors = [
+    { name = "iliana" },
+]
+keywords = [
+    "plc", "rusty", "iec-61131-3", "structured-text",
+    "llvm", "compiler",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+]
+# ``universal_machinery`` is the parent vendor-neutral IL project that
+# owns the ST emitter this backend dispatches to.  Not on PyPI yet;
+# consume via the parent repo's submodule layout, or pip-install
+# from the parent's git URL alongside this package.
+dependencies = [
+    "universal_machinery",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rusty_backend*"]
