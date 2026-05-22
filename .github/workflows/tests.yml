@@ -54,16 +54,11 @@ jobs:
         # Pinning to a specific release tag keeps the test surface
         # deterministic -- bump as new rusty releases land.
         run: |
-          curl -sSL \
+          sudo curl -sSL \
             https://github.com/PLC-lang/rusty/releases/download/v0.5.0/plc-linux-x86_64 \
             -o /usr/local/bin/plc
-          chmod +x /usr/local/bin/plc
+          sudo chmod +x /usr/local/bin/plc
           plc --version || true
-        shell: bash
-        env:
-          # Override the runner's apt-set PATH so /usr/local/bin
-          # comes first; safer than relying on default order.
-          PATH: /usr/local/bin:${{ env.PATH }}
 
       - name: Run pytest
         # API-shape smoke tests + real round-trip via the rusty
