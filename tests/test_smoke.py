@@ -73,14 +73,36 @@ def test_write_xml_rejected_with_pointer_to_openplc(tmp_path):
         backend.write(program(subroutines=[prog("Main", main=True)]), str(out))
 
 
-def test_read_raises_not_implemented(tmp_path):
-    """No full-program ST parser upstream yet; rejecting cleanly
-    beats silently returning an empty Program."""
+def test_read_st_round_trips_via_parse_program(tmp_path):
+    """``.st`` parsing wired in via the parent's
+    ``parsers.st_text.parse_program`` (universal_machinery PR
+    #84).  Round-trip pinned: write ST, read it back, check the
+    POU set survives."""
     from rusty_backend import RustyBackend
-    out = tmp_path / "prog.st"
-    out.write_text("PROGRAM Main\nEND_PROGRAM\n")
+    from universal_machinery.builders import (
+        coil, no, prog, program, rung, var,
+    )
+    from universal_machinery.il import TagType
     backend = RustyBackend()
-    with pytest.raises(NotImplementedError):
+    out = tmp_path / "prog.st"
+    p = program(subroutines=[
+        prog("Main", main=True,
+             local_vars=[var("x", TagType.BOOL), var("y", TagType.BOOL)],
+             rungs=[rung(no("x"), coil("y"))]),
+    ])
+    backend.write(p, str(out))
+    parsed = backend.read(str(out))
+    assert sorted(s.name for s in parsed.subroutines) == ["Main"]
+
+
+def test_read_unknown_suffix_raises_value_error(tmp_path):
+    """Non-``.st`` paths raise ``ValueError`` with a pointer to
+    the openplc backend (which handles .xml)."""
+    from rusty_backend import RustyBackend
+    out = tmp_path / "prog.xml"
+    out.write_text("<not_st/>")
+    backend = RustyBackend()
+    with pytest.raises(ValueError, match="openplc"):
         backend.read(str(out))
 
 
