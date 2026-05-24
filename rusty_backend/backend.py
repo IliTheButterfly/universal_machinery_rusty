@@ -93,14 +93,18 @@ class RustyBackend(Backend):
 
         Routes through the parent's full-program ST parser
         (``universal_machinery.parsers.st_text.parse_program``,
-        added in universal_machinery PR #84).  Scope (v1):
-        PROGRAM / FUNCTION / FUNCTION_BLOCK with VAR_INPUT /
-        VAR_OUTPUT / VAR_IN_OUT / VAR (LOCAL) blocks + body.
+        added in universal_machinery PR #84, currently v6).
+        Scope: PROGRAM / FUNCTION / FUNCTION_BLOCK with all 7
+        IEC §2.4.3 VAR_* directions, IEC §2.4.1.1 AT clauses,
+        IEC §2.3.3 TYPE blocks, IEC §2.7 CONFIGURATION /
+        RESOURCE / TASK, IEC 3rd-edition OOP (METHOD /
+        INTERFACE / EXTENDS / IMPLEMENTS / ABSTRACT -- the
+        headline rusty-specific shape that matiec rejects),
+        and IEC §6.7 SFC text + body.
 
-        Out-of-scope shapes (VAR_EXTERNAL / VAR_TEMP /
-        VAR_GLOBAL, AT clauses, TYPE blocks, CONFIGURATION, OOP,
-        SFC text) raise ``StParseError`` from the parser side
-        with a focused message pointing at the missing slice.
+        Only CLASS / class-level OOP raises ``StParseError``
+        from the parser side with a focused message pointing
+        at the missing slice.
         """
         p = Path(path)
         suffix = p.suffix.lower()
